@@ -1,6 +1,7 @@
 from datetime import datetime
 from contextlib import asynccontextmanager
 import base64
+from io import BytesIO
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +18,9 @@ def get_recent_scores(model_name):
 def tensor_to_base64(tensor):
     transform = transforms.ToPILImage()
     pil_image = transform(tensor)
-    image_bytes = pil_image.tobytes()
-    base64_string = base64.b64encode(image_bytes).decode()
+    buffered = BytesIO()
+    pil_image.save(buffered, format="PNG")
+    base64_string = base64.b64encode(buffered.getvalue()).decode()
     return base64_string
 
 models = {}
@@ -32,7 +34,8 @@ async def lifespan(app: FastAPI):
     models["resnet50"] = "resnet50"
     models["resnet101"] = "resnet101"
     models["resnet152"] = "resnet152"
-    datasets["cifar10"] = iter(DataLoader(CifarDataset("./data/test", train=False), batch_size=5, shuffle=True))
+    datasets["cifar10_dataset"] = CifarDataset("./data/test", train=False)
+    datasets["cifar10_dataloader"] = iter(DataLoader(datasets["cifar10_dataset"], batch_size=100, shuffle=True))
     yield
     models.clear()
 
@@ -63,10 +66,17 @@ async def get_models():
 
 @app.get("/images", response_model=list[ImageOut])
 async def get_images():
-    indexes, tensors, labels = next(datasets["cifar10"])
-    images = [ImageOut(file_name=f"test_{index}", base64=tensor_to_base64(tensor)) 
-           for index, tensor in zip(indexes, tensors)]
-    return images
+    try:
+        indexes, tensors, labels = next(datasets["cifar10_dataloader"])
+        images = [ImageOut(file_name=f"test_{index}", base64=tensor_to_base64(tensor)) 
+            for index, tensor in zip(indexes, tensors)]
+        return images
+    except StopIteration as e:
+        datasets["cifar10_dataloader"] = iter(DataLoader(datasets["cifar10_dataset"], batch_size=100, shuffle=True))
+        indexes, tensors, labels = next(datasets["cifar10_dataloader"])
+        images = [ImageOut(file_name=f"test_{index}", base64=tensor_to_base64(tensor)) 
+            for index, tensor in zip(indexes, tensors)]
+        return images
 
 @app.post("/images/{file_name}/guess")
 async def guess_image():
