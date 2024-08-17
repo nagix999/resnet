@@ -1,7 +1,9 @@
 # resnet
 
 Deep Residual Learning for Image Recognition 논문을 pytorch로 구현
+
 Resnet 모델 구현의 핵심이 되는 Residual Block(BasicBlock, BottleneckBlock)을 Resnet Architecture를 참고하여 구현
+
 18, 34, 50, 101, 152 Layers 구성(18, 32 - BasicBlock, 50, 101, 152 - BottleneckBlock)
 
 ## 논문 설명
